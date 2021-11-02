@@ -21,19 +21,54 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
+
 let _clipboardList = document.querySelector("#clipboard_list");
+let addButton = document.getElementById('add-btn');
+addButton.addEventListener('click', (event) => {
+    let textitem = ''
+    let emptyDiv = document.getElementById('empty-div');
+    let downloadDiv = document.getElementById('download-btn');
+    let searchInput = document.getElementById('searchText');
+    emptyDiv.classList.add('hide-div');
+    downloadDiv.style.display = 'block';
+    document.getElementsByClassName('doc')[0].addEventListener('click', (event) => {
+        downloadClipboardTextAsDoc()
+    })
+    document.getElementsByClassName('csv')[0].addEventListener('click', (event) => {
+        downloadClipboardTextAsCsv()
+    })
+    searchInput.style.display = 'block';
+    searchInput.addEventListener('keyup', () => {
+        searchClipboardText();
+    })
+    addClipboardListItem(textitem)
+})
 function getClipboardText() {
     chrome.storage.sync.get(['list'], clipboard => {
         let list = clipboard.list;
         let emptyDiv = document.getElementById('empty-div');
+        let downloadDiv = document.getElementById('download-btn');
+        let searchInput = document.getElementById('searchText');
         if (list === undefined || list.length === 0) {
             emptyDiv.classList.remove('hide-div');
+            downloadDiv.style.display = 'none';
+            searchInput.style.display = 'none';
         }
         else {
             emptyDiv.classList.add('hide-div');
+            downloadDiv.style.display = 'block';
+            document.getElementsByClassName('doc')[0].addEventListener('click', (event) => {
+                downloadClipboardTextAsDoc()
+            })
+            document.getElementsByClassName('csv')[0].addEventListener('click', (event) => {
+                downloadClipboardTextAsCsv()
+            })
+            searchInput.style.display = 'block';
+            searchInput.addEventListener('keyup', () => {
+                searchClipboardText();
+            })
             if (typeof list !== undefined)
                 list.forEach(item => {
-                    console.log(item);
                     addClipboardListItem(item)
                 });
         }
@@ -123,8 +158,9 @@ function addClipboardListItem(text) {
     listDiv.appendChild(listPara);
     listPara.addEventListener('focusout', (event) => {
         event.target.setAttribute("contenteditable", "false");
+        listPara.style.height = '4em';
+        listPara.style.whiteSpace = 'inherit'
         newText = event.target.textContent;
-        console.log(newText);
         chrome.storage.sync.get(['list'], clipboard => {
             let list = clipboard.list;
             let index = list.indexOf(prevText);
@@ -134,9 +170,10 @@ function addClipboardListItem(text) {
     })
     listDiv.classList.add("list-div");
     contentDiv.appendChild(listDiv);
-    editImage.src = './images/edit.png';
-    editImage.classList.add("delete");
-    deleteImage.src = 'https://cdn.iconscout.com/icon/premium/png-256-thumb/delete-1432400-1211078.png'
+    editImage.src = './images/pencil.png';
+    editImage.classList.add("edit");
+    deleteImage.src = './images/delete-note.png';
+    // deleteImage.src = 'https://cdn.iconscout.com/icon/premium/png-256-thumb/delete-1432400-1211078.png'
     deleteImage.classList.add("delete")
 
     editDiv.appendChild(editImage);
@@ -152,7 +189,14 @@ function addClipboardListItem(text) {
         prevText = listPara.textContent;
         console.log(prevText);
         listPara.setAttribute("contenteditable", "true");
+        
+        listPara.style.height = 'auto';
+        listPara.style.whiteSpace = 'break-spaces';
         listPara.focus();
+        // listDiv.style.borderColor = "red";
+        // listPara.style.backgroundColor = "grey"
+        // listPara.style.height = "100px"
+        //listPara.focus();
     })
     deleteImage.addEventListener('click', (event) => {
         console.log("Delete clicked");
@@ -161,6 +205,16 @@ function addClipboardListItem(text) {
             let index = list.indexOf(text);
             list.splice(index, 1);
             _clipboardList.innerHTML = "";
+            chrome.storage.sync.get(['listURL'], url => {
+                let urlList = url.listURL;
+                urlList.splice(index, 1);
+                chrome.storage.sync.set({ 'listURL': urlList })
+            })
+            chrome.storage.sync.get(['originalList'], original => {
+                let originalList = original.originalList;
+                originalList.splice(index, 1);
+                chrome.storage.sync.set({ 'originalList': originalList })
+            })
             chrome.storage.sync.set({ 'list': list }, () => getClipboardText());
         })
     })
@@ -187,4 +241,98 @@ function addClipboardListItem(text) {
     });
 }
 
+
+function downloadClipboardTextAsDoc(){
+    chrome.storage.sync.get(['list'], clipboard => {
+        let list = clipboard.list;
+        let emptyDiv = document.getElementById('empty-div');
+        if (list === undefined || list.length === 0) {
+            emptyDiv.classList.remove('hide-div');
+            console.log("Nothing to download")
+        }
+        else {
+            var list_of_items = []
+            emptyDiv.classList.add('hide-div');
+            if (typeof list !== undefined){
+                list.forEach(item => {
+                    list_of_items = list_of_items + item + "\n\n"
+                });
+                var link, blob, url;
+                blob = new Blob(['\ufeff', list_of_items], {
+                    type: 'application/msword'
+                });
+                url = URL.createObjectURL(blob);
+                link = document.createElement('A');
+                link.href = url;
+                link.download = 'SimplyClip';  
+                document.body.appendChild(link);
+                if (navigator.msSaveOrOpenBlob )
+                    navigator.msSaveOrOpenBlob( blob, 'SimplyClip.doc'); 
+                else link.click();  // other browsers
+                document.body.removeChild(link);
+            }
+
+        }
+    });
+
+}
+
+function searchClipboardText() {
+    var input, filter, ul, li, a, i, txtValue;
+    input = document.getElementById("searchText");
+    filter = input.value.toUpperCase();
+    ul = document.getElementById("clipboard_list");
+    li = ul.getElementsByTagName("li");
+    for (i = 0; i < li.length; i++) {
+        divElement = li[i].getElementsByClassName("list-div")[0];
+        let elementText = divElement.getElementsByTagName('p')[0]
+        txtValue = elementText.textContent || elementText.innerText;
+        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+            li[i].style.display = "";
+        } else {
+            li[i].style.display = "none";
+        }
+    }
+}
 getClipboardText();
+
+  
+function downloadClipboardTextAsCsv() {
+    let data = [];
+    chrome.storage.sync.get(['list'], clipboard => {
+        clipboardData = clipboard.list
+        chrome.storage.sync.get(['listURL'], url => {
+            urlData = url.listURL
+            chrome.storage.sync.get(['originalList'], original => {
+                originalData = original.originalList
+                clipboardData.forEach((d, index) => {
+                    let rowData = [];
+                    rowData.push(d)
+                    rowData.push(originalData[index])
+                    rowData.push(urlData[index])
+                    data.push(rowData)
+                })
+
+                var csv = 'Edited Text,OriginalText,URL\n';
+                data.forEach(function (row) {
+                    for (let i in row) {
+                        row[i] = row[i].replace(/"/g, '""');
+                    }
+                    
+                    csv += '"' + row.join('","') + '"';
+                    csv += "\n";
+                });
+
+                var hiddenElement = document.createElement('a');
+                hiddenElement.href = 'data:text/csv;charset=utf-8,' + encodeURI(csv);
+                hiddenElement.target = '_blank';
+                hiddenElement.download = 'simplyClip.csv';
+                hiddenElement.click();
+            })
+        })
+    })
+
+
+
+
+}
